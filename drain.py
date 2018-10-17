@@ -3,11 +3,9 @@
 import kubernetes
 import operator
 import json
-
-#from kubernetes import client, config
+import time
 
 from cachetools import cachedmethod, TTLCache
-
 
 class Nedry:
     ANNOTATION_PREFIX = 'nedry-v1/'
@@ -21,6 +19,9 @@ class Nedry:
     # specified in seconds
     K8S_CACHE_TTL = 60
     K8S_CACHE_SIZE = 1024
+
+    # Wait up to a minute for actions in pod deletion
+    POD_DELETE_MAX_WAIT = 60
 
     def __init__(self):
         kubernetes.config.load_kube_config()
@@ -70,98 +71,99 @@ class Nedry:
                 pods.append(p)
         return pods
 
-    def get_owner_status(self, namespace, owner_name, owner_type):
-        print('Looking up status of {owner_type} for {owner_name} in {space}'.format(owner_type=owner_type, owner_name=owner_name, space=namespace))
+    def get_controller_status(self, namespace, controller_name, controller_type):
+        # print('Looking up status of {controller_type} for {controller_name} in {space}'.format(controller_type=controller_type, controller_name=controller_name, space=namespace))
 
-        owner_status = {'desired':0, 'ready':0, 'available':0}
+        controller_status = {'want':0, 'ready':0, 'available':0}
 
         # from most-common to least-common within our cluster
-        if owner_type == "ReplicaSet":
-            # {
-            #   "type": "ReplicaSet",
-            #   "available_replicas": 1,
-            #   "conditions": "",
-            #   "fully_labeled_replicas": 1,
-            #   "observed_generation": 3,
-            #   "ready_replicas": 1,
-            #   "replicas": 1
-            # }
-            rs = self.k8s_api_extv1b1.read_namespaced_replica_set_status(owner_name, namespace)
-            owner_status['desired'] = rs.status.replicas
-            owner_status['ready'] = rs.status.ready_replicas
-            owner_status['available'] = rs.status.available_replicas
+        if controller_type == "ReplicaSet":
+            # {"type":"ReplicaSet","available_replicas":1,"conditions":"","fully_labeled_replicas":1,"observed_generation":3,"ready_replicas":1,"replicas":1}
+            rs = self.k8s_api_extv1b1.read_namespaced_replica_set_status(controller_name, namespace)
+            controller_status['want'] = rs.status.replicas
+            controller_status['ready'] = rs.status.ready_replicas
+            controller_status['available'] = rs.status.available_replicas
 
-        elif owner_type == "StatefulSet":
-            # {
-            #   "type": "StatefulSet",
-            #   "collision_count": "",
-            #   "conditions": "",
-            #   "current_replicas": "",
-            #   "current_revision": "rabbitmq-713823586",
-            #   "observed_generation": 4,
-            #   "ready_replicas": 3,
-            #   "replicas": 3,
-            #   "update_revision": "rabbitmq-4122884199",
-            #   "updated_replicas": 3
-            # }
-            ss = self.k8s_api_appsv1b1.read_namespaced_stateful_set_status(owner_name, namespace)
-            owner_status['desired'] = ss.status.replicas
-            owner_status['ready'] = ss.status.ready_replicas
-            owner_status['available'] = ss.status.ready_replicas
+        elif controller_type == "StatefulSet":
+            # {"type":"StatefulSet","collision_count":"","conditions":"","current_replicas":"","current_revision":"service-713823586","observed_generation":4,"ready_replicas":3,"replicas":3,"update_revision":"service-4122884199","updated_replicas":3}
+            ss = self.k8s_api_appsv1b1.read_namespaced_stateful_set_status(controller_name, namespace)
+            controller_status['want'] = ss.status.replicas
+            controller_status['ready'] = ss.status.ready_replicas
+            controller_status['available'] = ss.status.ready_replicas
 
-        elif owner_type == 'DaemonSet':
-            # {
-            #   "type": "DaemonSet",
-            #   "collision_count": "",
-            #   "conditions": "",
-            #   "current_number_scheduled": 3,
-            #   "desired_number_scheduled": 3,
-            #   "number_available": 3,
-            #   "number_misscheduled": 0,
-            #   "number_ready": 3,
-            #   "number_unavailable": "",
-            #   "observed_generation": 32,
-            #   "updated_number_scheduled": 3
-            # }
-            ds = self.k8s_api_extv1b1.read_namespaced_daemon_set_status(owner_name, namespace)
-            owner_status['desired'] = ds.status.desired_number_scheduled
-            owner_status['ready'] = ds.status.number_ready
-            owner_status['available'] = ds.status.number_available
+        elif controller_type == 'DaemonSet':
+            # {"type":"DaemonSet","collision_count":"","conditions":"","current_number_scheduled":3,"desired_number_scheduled":3,"number_available":3,"number_misscheduled":0,"number_ready":3,"number_unavailable":"","observed_generation":32,"updated_number_scheduled":3}
+            ds = self.k8s_api_extv1b1.read_namespaced_daemon_set_status(controller_name, namespace)
+            controller_status['want'] = ds.status.desired_number_scheduled
+            controller_status['ready'] = ds.status.number_ready
+            controller_status['available'] = ds.status.number_available
 
-        elif owner_type == 'Job':
+        elif controller_type == 'Job':
             print('JOB type not yet supported')
 
         else:
-            print('Unknown parent type: {}'.format(owner_type))
+            print('Unknown parent type: {}'.format(controller_type))
 
-        return owner_status
+        return controller_status
 
+
+    def wait_for_healthy_controller(self, namespace, controller_name, controller_type):
+        status = self.get_controller_status(namespace, controller_name, controller_type)
+        print("Current state of {controller_type}.{controller_name} in {space} is want: {want}, ready: {ready}, available: {available}".format(
+            controller_type=controller_type,
+            controller_name=controller_name,
+            space=namespace,
+            **status
+            )
+        )
+
+        for loop in range(self.POD_DELETE_MAX_WAIT):
+            status = self.get_controller_status(namespace, controller_name, controller_type)
+            if status['want'] == status['ready'] and status['ready'] == status['available']:
+                break
+            time.sleep(1)
+
+        return status['want'] == status['ready'] and status['ready'] == status['available']
+
+    def delete_pod(self, namespace, pod):
+        print("normally I would delete {}.{}".format(namespace,pod))
+        time.sleep(3)
 
     def safe_delete_pod(self, pod):
 
-        pod_name = pod.metadata.name
         namespace = pod.metadata.namespace
-        print("checking current state of pod {pod} in {space}".format(pod=pod_name,space=namespace))
+        pod_name  = pod.metadata.name
 
         if pod.metadata.owner_references is None:
-            print("*** {} is an orphan pod? that's weird and scary".format(pod_name))
+            print("*** {} is an orphan pod - that's weird and scary, so I'm outta here".format(pod_name))
             return
 
         owner = pod.metadata.owner_references[0]
         owner_type = owner.kind
         owner_name = owner.name
 
-        status = self.get_owner_status(namespace, owner_name, owner_type)
+        status = self.wait_for_healthy_controller(namespace, owner_name, owner_type)
+        if status is False:
+            print("Timed out waiting for controller {owner_type} for {pod} to go healthy, not deleting".format(owner_type=owner_type, pod=pod_name))
+            return
 
-        print("Want: {desired}, have {ready} with {available} finished initialization".format(**status))
+        print("Service is healthy, deleting pod {}".format(pod_name))
+
+        self.delete_pod(namespace, pod_name)
+
+        status = self.wait_for_healthy_controller(namespace, owner_name, owner_type)
+        if status is False:
+            print("Timed out waiting for controller {owner_type} for {pod} to come back up healthy".format(owner_type=owner_type, pod=pod_name))
+            return
+
+        print("back to happy")
+        return
+
+
 
 nedry = Nedry()
 actionable_nodes = nedry.nodes_to_drain()
 pods_to_drain = nedry.get_pods_on_node(actionable_nodes)
-
-#p = pods_to_drain[0]
-#nedry.safe_delete_pod(p)
-
 
 for p in pods_to_drain:
     nedry.safe_delete_pod(p)
