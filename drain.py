@@ -2,10 +2,10 @@
 
 import kubernetes
 import operator
-import json
 import time
 
 from cachetools import cachedmethod, TTLCache
+
 
 class Nedry:
     ANNOTATION_PREFIX = 'nedry-v1/'
@@ -54,7 +54,7 @@ class Nedry:
     def nodes_to_drain(self):
         filtered = []
         for n in self.filter_nodes_by_action(self.ACTION_DRAIN):
-#            if n.spec.unschedulable:
+            if n.spec.unschedulable:
                 filtered.append(n)
         return filtered
 
@@ -72,9 +72,12 @@ class Nedry:
         return pods
 
     def get_controller_status(self, namespace, controller_name, controller_type):
-        # print('Looking up status of {controller_type} for {controller_name} in {space}'.format(controller_type=controller_type, controller_name=controller_name, space=namespace))
+        # print('Looking up status of {controller_type} for {controller_name} in {space}'.format(
+        #     controller_type=controller_type,
+        #     controller_name=controller_name,
+        #     space=namespace))
 
-        controller_status = {'want':0, 'ready':0, 'available':0}
+        controller_status = {'want': 0, 'ready': 0, 'available': 0}
 
         # from most-common to least-common within our cluster
         if controller_type == "ReplicaSet":
@@ -106,16 +109,16 @@ class Nedry:
 
         return controller_status
 
-
     def wait_for_healthy_controller(self, namespace, controller_name, controller_type):
         status = self.get_controller_status(namespace, controller_name, controller_type)
-        print("Current state of {controller_type}.{controller_name} in {space} is want: {want}, ready: {ready}, available: {available}".format(
-            controller_type=controller_type,
-            controller_name=controller_name,
-            space=namespace,
-            **status
-            )
-        )
+        print("Current state of {controller_type}.{controller_name} in {space} is"
+              "want: {want}, ready: {ready}, available: {available}".format(
+                controller_type=controller_type,
+                controller_name=controller_name,
+                space=namespace,
+                **status
+                )
+              )
 
         for loop in range(self.POD_DELETE_MAX_WAIT):
             status = self.get_controller_status(namespace, controller_name, controller_type)
@@ -126,13 +129,13 @@ class Nedry:
         return status['want'] == status['ready'] and status['ready'] == status['available']
 
     def delete_pod(self, namespace, pod):
-        print("normally I would delete {}.{}".format(namespace,pod))
-        time.sleep(3)
+        print("normally I would delete {}.{}".format(namespace, pod))
+        time.sleep(1)
 
     def safe_delete_pod(self, pod):
 
         namespace = pod.metadata.namespace
-        pod_name  = pod.metadata.name
+        pod_name = pod.metadata.name
 
         if pod.metadata.owner_references is None:
             print("*** {} is an orphan pod - that's weird and scary, so I'm outta here".format(pod_name))
@@ -144,7 +147,10 @@ class Nedry:
 
         status = self.wait_for_healthy_controller(namespace, owner_name, owner_type)
         if status is False:
-            print("Timed out waiting for controller {owner_type} for {pod} to go healthy, not deleting".format(owner_type=owner_type, pod=pod_name))
+            print("Timed out waiting for controller {owner_type} for {pod} to go healthy, not deleting".format(
+                owner_type=owner_type,
+                pod=pod_name)
+            )
             return
 
         print("Service is healthy, deleting pod {}".format(pod_name))
@@ -153,12 +159,14 @@ class Nedry:
 
         status = self.wait_for_healthy_controller(namespace, owner_name, owner_type)
         if status is False:
-            print("Timed out waiting for controller {owner_type} for {pod} to come back up healthy".format(owner_type=owner_type, pod=pod_name))
+            print("Timed out waiting for controller {owner_type} for {pod} to come back up healthy".format(
+                owner_type=owner_type,
+                pod=pod_name)
+            )
             return
 
         print("back to happy")
         return
-
 
 
 nedry = Nedry()
@@ -169,4 +177,3 @@ for p in pods_to_drain:
     nedry.safe_delete_pod(p)
 
 print("done")
-
