@@ -33,7 +33,7 @@ class Nedry:
     @cachedmethod(operator.attrgetter('api_cache'))
     def get_worker_nodes(self):
         nodes = []
-        node_list = self.k8s_api_core.list_node()
+        node_list = self.k8s_api_core.list_node(watch=False)
         for n in node_list.items:
             if 'kubernetes.io/role' in n.metadata.labels:
                 if n.metadata.labels['kubernetes.io/role'] == 'node':
@@ -128,8 +128,10 @@ class Nedry:
 
         return status['want'] == status['ready'] and status['ready'] == status['available']
 
-    def delete_pod(self, namespace, pod):
-        print("normally I would delete {}.{}".format(namespace, pod))
+    def delete_pod(self, namespace, pod_name):
+        delete_options = kubernetes.client.V1DeleteOptions()
+        response = self.k8s_api_core.delete_namespaced_pod(pod_name, namespace, delete_options)
+        print(response)
         time.sleep(1)
 
     def safe_delete_pod(self, pod):
