@@ -1,0 +1,33 @@
+[all]
+files = **.py
+language = python
+max_line_length = 150
+use_spaces = True
+
+[all.python.analysis]
+bears = LineLengthBear, QuotesBear, SpaceConsistencyBear
+default_actions = *: ApplyPatchAction
+ignore_length_regex = https?://
+preferred_quotation = '
+
+[all.python.style]
+bears = PEP8Bear, PyCommentedCodeBear, PyUnusedCodeBear, PycodestyleBear
+default_actions = *: ShowPatchAction
+remove_all_unused_imports = True
+language = python
+
+[all.python.cve]
+bears = RadonBear, BanditBear
+
+[all.linelength]  # Sometimes autopep8 makes too long lines, need to check after!
+bears = LineLengthBear
+ignore_length_regex = ^.*https?://
+
+[all.LineCounting]
+bears = LineCountBear
+max_lines_per_file = 500
+
+[all.TODOS]
+bears = KeywordBear
+language = python
+

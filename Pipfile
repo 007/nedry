@@ -8,7 +8,7 @@ kubernetes = "*"
 cachetools = "*"
 
 [dev-packages]
-"flake8" = "*"
+coala-bears = "*"
 
 [requires]
 python_version = "3.7"
