@@ -195,7 +195,7 @@ class Nedry:
     def delete_pod(self, namespace, pod_name):
         delete_options = kubernetes.client.V1DeleteOptions()
         response = self.k8s_api_core.delete_namespaced_pod(pod_name, namespace, delete_options)
-        print(response)
+        # print(response)
         time.sleep(1)
 
     def safe_delete_pod(self, pod):
@@ -239,8 +239,9 @@ nedry = Nedry()
 actionable_nodes = nedry.nodes_to_drain()
 pods_to_drain = nedry.get_pods_on_node(actionable_nodes)
 
+print('Rescheduling {} pods'.format(len(pods_to_drain)))
+
 for p in pods_to_drain:
-    if p.metadata.name == 'django-2467446388-7l4tv':
-        nedry.safe_delete_pod(p)
+    nedry.safe_delete_pod(p)
 
 print('done')
