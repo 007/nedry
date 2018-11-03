@@ -173,7 +173,7 @@ class Nedry:
 
     def wait_for_healthy_controller(self, namespace, controller_name, controller_type):
         status = self.get_controller_status(namespace, controller_name, controller_type)
-        print('Current state of {controller_type}.{controller_name} in {space} is'
+        print('Current state of {controller_type}.{controller_name} in {space} is '
               'want: {want}, ready: {ready}, available: {available}'.format(
                 controller_type=controller_type,
                 controller_name=controller_name,
@@ -183,7 +183,8 @@ class Nedry:
               )
 
         wait_timeout = status['wait_timeout'] * self.POD_DELETE_MAX_WAIT
-        print('Waiting up to {} seconds for pod to stabilize'.format(wait_timeout))
+        if self._DEBUG:
+            print('Waiting up to {} seconds for pod to stabilize'.format(wait_timeout))
 
         for loop in range(wait_timeout):
             status = self.get_controller_status(namespace, controller_name, controller_type)
@@ -231,7 +232,9 @@ class Nedry:
             )
             return
 
-        print('back to happy')
+        if self._DEBUG:
+            print('back to happy')
+
         return
 
 
