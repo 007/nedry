@@ -22,8 +22,8 @@ class Nedry:
     K8S_CACHE_TTL = 60
     K8S_CACHE_SIZE = 1024
 
-    # Wait up to a minute for actions in pod deletion
-    POD_DELETE_MAX_WAIT = 60
+    # Wait up to 2x expected timeout for actions in pod deletion
+    POD_DELETE_MAX_WAIT = 2
 
     def __init__(self):
         kubernetes.config.load_kube_config()
@@ -73,6 +73,30 @@ class Nedry:
                 pods.append(p)
         return pods
 
+    def calculate_max_probe_timeout(self, probe):
+        probe_timeout = probe.initial_delay_seconds
+        probe_timeout += probe.success_threshold * (probe.timeout_seconds + probe.period_seconds)
+        return probe_timeout
+
+    def calculate_wait_timeout(self, spec):
+        data = spec.template.spec
+        wait_timeout = 0
+        wait_timeout += data.termination_grace_period_seconds
+        container_max = -1
+        for container in data.containers:
+            container_live_timeout = 0
+            container_ready_timeout = 0
+            if container.liveness_probe:
+                container_live_timeout = self.calculate_max_probe_timeout(container.liveness_probe)
+                if container_live_timeout > container_max:
+                    container_max = container_live_timeout
+            if container.readiness_probe:
+                container_ready_timeout = self.calculate_max_probe_timeout(container.readiness_probe)
+                if container_ready_timeout > container_max:
+                    container_max = container_ready_timeout
+
+        return wait_timeout + container_max
+
     def get_controller_status(self, namespace, controller_name, controller_type):
         if self._DEBUG:
             print('Looking up status of {controller_type} for {controller_name} in {space}'.format(
@@ -80,7 +104,7 @@ class Nedry:
                 controller_name=controller_name,
                 space=namespace))
 
-        controller_status = {'want': 0, 'ready': 0, 'available': 0}
+        controller_status = {'want': 0, 'ready': 0, 'available': 0, 'wait_timeout': 1}
 
         # from most-common to least-common within our cluster
         if controller_type == 'ReplicaSet':
@@ -97,6 +121,7 @@ class Nedry:
             controller_status['want'] = rs.status.replicas
             controller_status['ready'] = rs.status.ready_replicas
             controller_status['available'] = rs.status.available_replicas
+            controller_status['wait_timeout'] = self.calculate_wait_timeout(rs.spec)
 
         elif controller_type == 'StatefulSet':
             # {  # Ignore PyCommentedCodeBear
@@ -115,6 +140,7 @@ class Nedry:
             controller_status['want'] = ss.status.replicas
             controller_status['ready'] = ss.status.ready_replicas
             controller_status['available'] = ss.status.ready_replicas
+            controller_status['wait_timeout'] = self.calculate_wait_timeout(ss.spec)
 
         elif controller_type == 'DaemonSet':
             # {  # Ignore PyCommentedCodeBear
@@ -134,6 +160,7 @@ class Nedry:
             controller_status['want'] = ds.status.desired_number_scheduled
             controller_status['ready'] = ds.status.number_ready
             controller_status['available'] = ds.status.number_available
+            controller_status['wait_timeout'] = self.calculate_wait_timeout(ds.spec)
 
         elif controller_type == 'Job':
             print('JOB type not yet supported')
@@ -154,7 +181,10 @@ class Nedry:
                 )
               )
 
-        for loop in range(self.POD_DELETE_MAX_WAIT):
+        wait_timeout = status['wait_timeout'] * self.POD_DELETE_MAX_WAIT
+        print('Waiting up to {} seconds for pod to stabilize'.format(wait_timeout))
+
+        for loop in range(wait_timeout):
             status = self.get_controller_status(namespace, controller_name, controller_type)
             if status['want'] == status['ready'] and status['ready'] == status['available']:
                 break
