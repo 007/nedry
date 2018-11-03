@@ -192,11 +192,10 @@ class Nedry:
 
         return status['want'] == status['ready'] and status['ready'] == status['available']
 
-    def delete_pod(self, namespace, pod_name):
+    def delete_pod(self, namespace, pod_name, grace_period):
         delete_options = kubernetes.client.V1DeleteOptions()
         response = self.k8s_api_core.delete_namespaced_pod(pod_name, namespace, delete_options)
-        # print(response)
-        time.sleep(1)
+        time.sleep(grace_period + 1)
 
     def safe_delete_pod(self, pod):
 
@@ -221,7 +220,7 @@ class Nedry:
 
         print('Service is healthy, deleting pod {}'.format(pod_name))
 
-        self.delete_pod(namespace, pod_name)
+        self.delete_pod(namespace, pod_name, pod.spec.termination_grace_period_seconds)
 
         status = self.wait_for_healthy_controller(namespace, owner_name, owner_type)
         if status is False:
