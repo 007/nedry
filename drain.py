@@ -248,16 +248,18 @@ class Nedry:
 
         return
 
+    def drain(self):
+        actionable_nodes = self.nodes_to_drain()
+        pods_to_drain = self.get_pods_on_node(actionable_nodes)
+
+        print('Rescheduling {} pods'.format(len(pods_to_drain)))
+
+        random.shuffle(pods_to_drain)
+
+        for p in pods_to_drain:
+            self.safe_delete_pod(p)
+
+        print('done')
 
 nedry = Nedry()
-actionable_nodes = nedry.nodes_to_drain()
-pods_to_drain = nedry.get_pods_on_node(actionable_nodes)
-
-print('Rescheduling {} pods'.format(len(pods_to_drain)))
-
-random.shuffle(pods_to_drain)
-
-for p in pods_to_drain:
-    nedry.safe_delete_pod(p)
-
-print('done')
+nedry.drain()
