@@ -23,8 +23,11 @@ class Nedry:
     def __init__(self):
         kubernetes.config.load_kube_config()
         self.k8s_api_core = kubernetes.client.CoreV1Api()
+        self.k8s_api_core.pool = None
         self.k8s_api_extv1b1 = kubernetes.client.ExtensionsV1beta1Api()
+        self.k8s_api_extv1b1.pool = None
         self.k8s_api_appsv1b1 = kubernetes.client.AppsV1beta1Api()
+        self.k8s_api_appsv1b1.pool = None
 
     def get_worker_nodes(self):
         nodes = []
