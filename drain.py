@@ -4,8 +4,6 @@ import operator
 import random
 import time
 
-from cachetools import cachedmethod
-from cachetools import TTLCache
 import kubernetes
 
 
@@ -19,10 +17,6 @@ class Nedry:
     ACTION_NOMATCH = None
     ACTION_DRAIN = 'drain'
 
-    # specified in seconds
-    K8S_CACHE_TTL = 60
-    K8S_CACHE_SIZE = 1024
-
     # Wait up to 2x expected timeout for actions in pod deletion
     POD_DELETE_MAX_WAIT = 2
 
@@ -31,9 +25,7 @@ class Nedry:
         self.k8s_api_core = kubernetes.client.CoreV1Api()
         self.k8s_api_extv1b1 = kubernetes.client.ExtensionsV1beta1Api()
         self.k8s_api_appsv1b1 = kubernetes.client.AppsV1beta1Api()
-        self.api_cache = TTLCache(self.K8S_CACHE_SIZE, self.K8S_CACHE_TTL)
 
-    @cachedmethod(operator.attrgetter('api_cache'))
     def get_worker_nodes(self):
         nodes = []
         node_list = self.k8s_api_core.list_node(watch=False)
