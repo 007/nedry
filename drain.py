@@ -22,12 +22,28 @@ class Nedry:
 
     def __init__(self):
         kubernetes.config.load_kube_config()
-        self.k8s_api_core = kubernetes.client.CoreV1Api()
-        self.k8s_api_core.pool = None
-        self.k8s_api_extv1b1 = kubernetes.client.ExtensionsV1beta1Api()
-        self.k8s_api_extv1b1.pool = None
-        self.k8s_api_appsv1b1 = kubernetes.client.AppsV1beta1Api()
-        self.k8s_api_appsv1b1.pool = None
+        self._k8s_api = {}
+
+    @property
+    def k8s_api_core(self):
+        if not 'core' in self._k8s_api:
+            self._k8s_api['core'] = kubernetes.client.CoreV1Api()
+            self._k8s_api['core'].pool = None
+        return self._k8s_api['core']
+
+    @property
+    def k8s_api_extv1b1(self):
+        if not 'extv1b1' in self._k8s_api:
+            self._k8s_api['extv1b1'] = kubernetes.client.ExtensionsV1beta1Api()
+            self._k8s_api['extv1b1'].pool = None
+        return self._k8s_api['extv1b1']
+
+    @property
+    def k8s_api_appsv1b1(self):
+        if not 'appsv1b1' in self._k8s_api:
+            self._k8s_api['appsv1b1'] = kubernetes.client.AppsV1beta1Api()
+            self._k8s_api['appsv1b1'].pool = None
+        return self._k8s_api['appsv1b1']
 
     def get_worker_nodes(self):
         nodes = []
