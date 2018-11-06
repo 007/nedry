@@ -49,6 +49,10 @@ class NedryKube:
                     nodes.append(n)
         return nodes
 
+    def get_all_pods(self):
+        ret = self.api_core.list_pod_for_all_namespaces(watch=False)
+        return ret.items
+
     def get_pods_on_node(self, nodes):
         pods = []
 
@@ -56,8 +60,7 @@ class NedryKube:
         for n in nodes:
             match_names.append(n.metadata.name)
 
-        ret = self.api_core.list_pod_for_all_namespaces(watch=False)
-        for p in ret.items:
+        for p in self.get_all_pods():
             if p.spec.node_name in match_names:
                 pods.append(p)
         return pods
