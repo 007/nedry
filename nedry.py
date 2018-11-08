@@ -71,6 +71,7 @@ class Nedry:
                                 'yellow',
                                 'on_red'
                                 )
+                            self.kube.safe_delete_pod(p)
                         else:
                             cprint('{ns}/{pod}: {actual} < {limit}, no action'.format(
                                     actual=actual,
