@@ -3,6 +3,7 @@
 import random
 
 from kube import NedryKube
+from termcolor import cprint
 
 
 class Nedry:
@@ -50,8 +51,11 @@ class Nedry:
         print('done')
 
     def softlimit(self):
+        print("fetching pods")
         pods = self.kube.get_all_pods()
+        print("fetching metrics")
         metrics = self.kube.get_metrics()
+        print("mashing everything up")
         for p in pods:
             if self.ANNOTATION_SOFTLIMIT in p.metadata.annotations:
                 limit = self.kube.suffixed_to_num(p.metadata.annotations[self.ANNOTATION_SOFTLIMIT])
@@ -63,18 +67,21 @@ class Nedry:
                     if k8s_podname in ns_metrics:
                         actual = ns_metrics[k8s_podname]['mem']
                         if actual > limit:
-                            print('{ns}/{pod}: {actual} > {limit}, soft kill'.format(
-                                actual=actual,
-                                limit=limit,
-                                ns=k8s_namespace,
-                                pod=k8s_podname)
+                            cprint('{ns}/{pod}: {actual} > {limit}, soft kill'.format(
+                                    actual=actual,
+                                    limit=limit,
+                                    ns=k8s_namespace,
+                                    pod=k8s_podname),
+                                'yellow',
+                                'on_red'
                                 )
                         else:
-                            print('{ns}/{pod}: {actual} < {limit}, no action'.format(
-                                actual=actual,
-                                limit=limit,
-                                ns=k8s_namespace,
-                                pod=k8s_podname)
+                            cprint('{ns}/{pod}: {actual} < {limit}, no action'.format(
+                                    actual=actual,
+                                    limit=limit,
+                                    ns=k8s_namespace,
+                                    pod=k8s_podname),
+                                'green'
                                 )
 
 

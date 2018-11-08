@@ -6,6 +6,7 @@ name = "pypi"
 [packages]
 kubernetes = "*"
 cachetools = "*"
+termcolor = "*"
 
 [dev-packages]
 coala-bears = "*"
