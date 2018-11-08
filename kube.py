@@ -1,6 +1,8 @@
+import json
 import time
 
 import kubernetes
+
 
 class NedryKube:
     _DEBUG = False
@@ -227,4 +229,45 @@ class NedryKube:
             print('back to happy')
 
         return
+
+    def suffixed_to_num(self, num):
+
+        if num[-1] == 'i':
+            suffix = num[-2:]
+            value = int(num[:-2])
+            if suffix == 'Ki':
+                return value * 1024
+            if suffix == 'Mi':
+                return value * 1024 * 1024
+            if suffix == 'Gi':
+                return value * 1024 * 1024 * 1024
+            if suffix == 'Ti':
+                return value * 1024 * 1024 * 1024 * 1024
+        elif num[-1] == 'm':
+            value = int(num[:-1])
+            return value
+
+        # fallthrough, assume we got a raw numeric value
+        return int(num)
+
+    def get_metrics(self):
+        raw_json = self.api_core.connect_get_namespaced_service_proxy_with_path('heapster', 'kube-system', '/apis/metrics/v1alpha1/pods')
+        raw = json.loads(raw_json.translate(str.maketrans("'", '"')))
+
+        metrics = {}
+
+        for e in raw['items']:
+            cpu = 0
+            mem = 0
+            for c in e['containers']:
+                usage = c['usage']
+                cpu = cpu + self.suffixed_to_num(usage['cpu'])
+                mem = mem + self.suffixed_to_num(usage['memory'])
+            m = e['metadata']
+            k8s_namespace = m['namespace']
+            k8s_podname = m['name']
+            if k8s_namespace not in metrics:
+                metrics[k8s_namespace] = {}
+            metrics[k8s_namespace][k8s_podname] = {'cpu': cpu, 'mem': mem}
+        return metrics
 

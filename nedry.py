@@ -4,6 +4,7 @@ import random
 
 from kube import NedryKube
 
+
 class Nedry:
     _DEBUG = False
     ANNOTATION_PREFIX = 'nedry-v1/'
@@ -48,5 +49,35 @@ class Nedry:
 
         print('done')
 
+    def softlimit(self):
+        pods = self.kube.get_all_pods()
+        metrics = self.kube.get_metrics()
+        for p in pods:
+            if self.ANNOTATION_SOFTLIMIT in p.metadata.annotations:
+                limit = self.kube.suffixed_to_num(p.metadata.annotations[self.ANNOTATION_SOFTLIMIT])
+                k8s_namespace = p.metadata.namespace
+                k8s_podname = p.metadata.name
+                # print('got one! {}/{}'.format(k8s_namespace, k8s_podname))
+                if k8s_namespace in metrics:
+                    ns_metrics = metrics[k8s_namespace]
+                    if k8s_podname in ns_metrics:
+                        actual = ns_metrics[k8s_podname]['mem']
+                        if actual > limit:
+                            print('{ns}/{pod}: {actual} > {limit}, soft kill'.format(
+                                actual=actual,
+                                limit=limit,
+                                ns=k8s_namespace,
+                                pod=k8s_podname)
+                                )
+                        else:
+                            print('{ns}/{pod}: {actual} < {limit}, no action'.format(
+                                actual=actual,
+                                limit=limit,
+                                ns=k8s_namespace,
+                                pod=k8s_podname)
+                                )
+
+
 nedry = Nedry()
-nedry.drain()
+# nedry.drain()
+nedry.softlimit()
