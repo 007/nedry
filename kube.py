@@ -1,4 +1,5 @@
 import json
+import random
 import time
 
 import kubernetes
@@ -51,8 +52,10 @@ class NedryKube:
                     nodes.append(n)
         return nodes
 
-    def get_all_pods(self):
+    def get_all_pods(self, ordered=False):
         ret = self.api_core.list_pod_for_all_namespaces(watch=False)
+        if not ordered:
+            random.shuffle(ret.items)
         return ret.items
 
     def get_pods_on_node(self, nodes):

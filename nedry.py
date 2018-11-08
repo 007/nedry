@@ -1,7 +1,5 @@
 #!python
 
-import random
-
 from kube import NedryKube
 from termcolor import cprint
 
@@ -42,8 +40,6 @@ class Nedry:
         pods_to_drain = self.kube.get_pods_on_node(actionable_nodes)
 
         print('Rescheduling {} pods'.format(len(pods_to_drain)))
-
-        random.shuffle(pods_to_drain)
 
         for p in pods_to_drain:
             self.kube.safe_delete_pod(p)
