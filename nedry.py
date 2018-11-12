@@ -1,4 +1,6 @@
-#!python
+#!/usr/bin/env python
+
+import argparse
 
 from kube import NedryKube
 from termcolor import cprint
@@ -82,6 +84,20 @@ class Nedry:
                                 )
 
 
-nedry = Nedry()
-# nedry.drain()
-nedry.softlimit()
+
+if __name__ == '__main__':
+    nedry = Nedry()
+
+    parser = argparse.ArgumentParser(prog='nedry')
+    parser.set_defaults(action=parser.print_help)
+    subparsers = parser.add_subparsers(help='sub-command help')
+
+    drain_parser = subparsers.add_parser('drain', help='drain a node safely')
+    drain_parser.set_defaults(action=nedry.drain)
+
+    softlimit_parser = subparsers.add_parser('softlimit', help='run soft-kill for soft memory limits')
+    softlimit_parser.set_defaults(action=nedry.softlimit)
+
+
+    args = parser.parse_args()
+    args.action()
