@@ -1,9 +1,10 @@
-#!/usr/bin/env python
+#!/usr/bin/env python -u
 
 import argparse
+import datetime
 
 from kube import NedryKube
-from termcolor import cprint
+from termcolor import colored
 
 
 class Nedry:
@@ -18,6 +19,9 @@ class Nedry:
 
     def __init__(self):
         self.kube = NedryKube()
+
+    def log(self, x):
+        print('{}: {}'.format(datetime.datetime.now().strftime('%Y-%m-%dT%H:%M:%S.%f%z'), x))
 
     def filter_nodes_by_action(self, action=ACTION_NOMATCH):
         filtered = []
@@ -41,19 +45,19 @@ class Nedry:
         actionable_nodes = self.nodes_to_drain()
         pods_to_drain = self.kube.get_pods_on_node(actionable_nodes)
 
-        print('Rescheduling {} pods'.format(len(pods_to_drain)))
+        self.log('Rescheduling {} pods'.format(len(pods_to_drain)))
 
         for p in pods_to_drain:
             self.kube.safe_delete_pod(p)
 
-        print('done')
+        self.log('done')
 
     def softlimit(self):
-        print("fetching pods")
+        self.log("fetching pods")
         pods = self.kube.get_all_pods()
-        print("fetching metrics")
+        self.log("fetching metrics")
         metrics = self.kube.get_metrics()
-        print("mashing everything up")
+        self.log("mashing everything up")
         for p in pods:
             if self.ANNOTATION_SOFTLIMIT in p.metadata.annotations:
                 limit = self.kube.suffixed_to_num(p.metadata.annotations[self.ANNOTATION_SOFTLIMIT])
@@ -65,23 +69,23 @@ class Nedry:
                     if k8s_podname in ns_metrics:
                         actual = ns_metrics[k8s_podname]['mem']
                         if actual > limit:
-                            cprint('{ns}/{pod}: {actual} > {limit}, soft kill'.format(
+                            self.log(colored('{ns}/{pod}: {actual} > {limit}, soft kill'.format(
                                     actual=actual,
                                     limit=limit,
                                     ns=k8s_namespace,
                                     pod=k8s_podname),
                                 'yellow',
                                 'on_red'
-                                )
+                                ))
                             self.kube.safe_delete_pod(p)
                         else:
-                            cprint('{ns}/{pod}: {actual} < {limit}, no action'.format(
+                            self.log(colored('{ns}/{pod}: {actual} < {limit}, no action'.format(
                                     actual=actual,
                                     limit=limit,
                                     ns=k8s_namespace,
                                     pod=k8s_podname),
                                 'green'
-                                )
+                                ))
 
 
 
