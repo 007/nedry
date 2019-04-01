@@ -4,6 +4,7 @@ import time
 
 import kubernetes
 
+from termcolor import colored
 
 class NedryKube:
     _DEBUG = False
@@ -201,19 +202,25 @@ class NedryKube:
         pod_name = pod.metadata.name
 
         if pod.metadata.owner_references is None:
-            print("*** {} is an orphan pod - that's weird and scary, so I'm outta here".format(pod_name))
+            print(colored("*** {} is an orphan pod - that's weird and scary, so I'm outta here".format(pod_name), 'yellow'))
             return
 
         owner = pod.metadata.owner_references[0]
         owner_type = owner.kind
         owner_name = owner.name
 
+        if owner_type == 'DaemonSet':
+            print(colored("*** {} is part of a daemonset, not deleting".format(pod_name), 'yellow'))
+            return
+
         status = self.wait_for_healthy_controller(namespace, owner_name, owner_type)
         if status is False:
-            print('Timed out waiting for controller {owner_type} for {pod} to go healthy, not deleting'.format(
+            print(colored('Timed out waiting for controller {owner_type} for {pod} to go healthy, not deleting'.format(
                 owner_type=owner_type,
-                pod=pod_name)
-            )
+                pod=pod_name),
+                'yellow',
+                'on_red'
+            ))
             return
 
         print('Service is healthy, deleting pod {}'.format(pod_name))
@@ -222,10 +229,12 @@ class NedryKube:
 
         status = self.wait_for_healthy_controller(namespace, owner_name, owner_type)
         if status is False:
-            print('Timed out waiting for controller {owner_type} for {pod} to come back up healthy'.format(
+            print(colored('Timed out waiting for controller {owner_type} for {pod} to come back up healthy'.format(
                 owner_type=owner_type,
-                pod=pod_name)
-            )
+                pod=pod_name),
+                'yellow',
+                'on_red'
+            ))
             return
 
         if self._DEBUG:
