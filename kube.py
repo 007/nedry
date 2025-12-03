@@ -29,20 +29,12 @@ class NedryKube:
         return self._api['core']
 
     @property
-    def api_extv1b1(self):
-        if 'extv1b1' not in self._api:
+    def api_apps(self):
+        if 'apps' not in self._api:
             self.k8s_ensure_initialized()
-            self._api['extv1b1'] = kubernetes.client.ExtensionsV1beta1Api()
-            self._api['extv1b1'].pool = None
-        return self._api['extv1b1']
-
-    @property
-    def api_appsv1b1(self):
-        if 'appsv1b1' not in self._api:
-            self.k8s_ensure_initialized()
-            self._api['appsv1b1'] = kubernetes.client.AppsV1beta1Api()
-            self._api['appsv1b1'].pool = None
-        return self._api['appsv1b1']
+            self._api['apps'] = kubernetes.client.AppsV1Api()
+            self._api['apps'].pool = None
+        return self._api['apps']
 
     def get_worker_nodes(self):
         nodes = []
@@ -115,7 +107,7 @@ class NedryKube:
             #   "ready_replicas": 1,
             #   "replicas": 1
             # }
-            rs = self.api_extv1b1.read_namespaced_replica_set_status(controller_name, namespace)
+            rs = self.api_apps.read_namespaced_replica_set_status(controller_name, namespace)
             controller_status['want'] = rs.status.replicas
             controller_status['ready'] = rs.status.ready_replicas
             controller_status['available'] = rs.status.available_replicas
@@ -134,7 +126,7 @@ class NedryKube:
             #   "update_revision": "service-4122884199",
             #   "updated_replicas": 3
             # }
-            ss = self.api_appsv1b1.read_namespaced_stateful_set_status(controller_name, namespace)
+            ss = self.api_apps.read_namespaced_stateful_set_status(controller_name, namespace)
             controller_status['want'] = ss.status.replicas
             controller_status['ready'] = ss.status.ready_replicas
             controller_status['available'] = ss.status.ready_replicas
@@ -154,7 +146,7 @@ class NedryKube:
             #   "observed_generation": 32,
             #   "updated_number_scheduled": 3
             # }
-            ds = self.api_extv1b1.read_namespaced_daemon_set_status(controller_name, namespace)
+            ds = self.api_apps.read_namespaced_daemon_set_status(controller_name, namespace)
             controller_status['want'] = ds.status.desired_number_scheduled
             controller_status['ready'] = ds.status.number_ready
             controller_status['available'] = ds.status.number_available
