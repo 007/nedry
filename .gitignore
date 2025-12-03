@@ -1,2 +1,14 @@
+# Python
 **.pyc
 __pycache__/
+
+# Go
+/nedry
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+vendor/

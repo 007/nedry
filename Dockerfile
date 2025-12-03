@@ -1,13 +1,25 @@
-FROM python:3.7-slim AS builder
-LABEL maintainer "ryan@espressive.com"
+FROM golang:1.21-alpine AS builder
+LABEL maintainer="ryan@espressive.com"
 
-ADD Pipfile Pipfile.lock /
-RUN pip install pipenv && pipenv lock -r > /requirements.txt
+WORKDIR /build
 
-FROM python:3.7-slim
-RUN mkdir /nedry
-WORKDIR /nedry
-COPY --from=builder /requirements.txt /nedry/
-COPY nedry.py kube.py /nedry/
-RUN pip install -r requirements.txt
-CMD ["/nedry.py"]
+# Copy go mod files first for better caching
+COPY go.mod go.sum ./
+RUN go mod download
+
+# Copy source code
+COPY cmd/ cmd/
+COPY pkg/ pkg/
+
+# Build static binary
+RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o nedry ./cmd/nedry
+
+# Final minimal distroless image
+FROM gcr.io/distroless/static-debian12:nonroot
+
+WORKDIR /app
+COPY --from=builder /build/nedry /app/nedry
+
+USER nonroot:nonroot
+
+ENTRYPOINT ["/app/nedry"]
