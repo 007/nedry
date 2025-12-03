@@ -36,6 +36,14 @@ class NedryKube:
             self._api['apps'].pool = None
         return self._api['apps']
 
+    @property
+    def api_custom(self):
+        if 'custom' not in self._api:
+            self.k8s_ensure_initialized()
+            self._api['custom'] = kubernetes.client.CustomObjectsApi()
+            self._api['custom'].pool = None
+        return self._api['custom']
+
     def get_worker_nodes(self):
         nodes = []
         node_list = self.api_core.list_node(watch=False)
@@ -255,8 +263,11 @@ class NedryKube:
         return int(num)
 
     def get_metrics(self):
-        raw_json = self.api_core.connect_get_namespaced_service_proxy_with_path('heapster', 'kube-system', '/apis/metrics/v1alpha1/pods')
-        raw = json.loads(raw_json.translate(str.maketrans("'", '"')))
+        raw = self.api_custom.list_cluster_custom_object(
+            group='metrics.k8s.io',
+            version='v1beta1',
+            plural='pods'
+        )
 
         metrics = {}
 

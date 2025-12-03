@@ -9,7 +9,7 @@ from termcolor import colored
 
 class Nedry:
     _DEBUG = False
-    ANNOTATION_PREFIX = 'nedry-v1/'
+    ANNOTATION_PREFIX = 'nedry-v2/'
 
     ANNOTATION_ACTION = ANNOTATION_PREFIX + 'action'
     ANNOTATION_SOFTLIMIT = ANNOTATION_PREFIX + 'limit'
