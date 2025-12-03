@@ -1,5 +1,8 @@
-FROM golang:1.21-alpine AS builder
+FROM --platform=$BUILDPLATFORM golang:1.21-alpine AS builder
 LABEL maintainer="ryan@espressive.com"
+
+ARG TARGETOS
+ARG TARGETARCH
 
 WORKDIR /build
 
@@ -11,8 +14,9 @@ RUN go mod download
 COPY cmd/ cmd/
 COPY pkg/ pkg/
 
-# Build static binary
-RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o nedry ./cmd/nedry
+# Build static binary for target platform
+RUN CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH:-amd64} \
+    go build -a -installsuffix cgo -ldflags="-s -w" -o nedry ./cmd/nedry
 
 # Final minimal distroless image
 FROM gcr.io/distroless/static-debian12:nonroot
