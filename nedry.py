@@ -26,11 +26,12 @@ class Nedry:
     def filter_nodes_by_action(self, action=ACTION_NOMATCH):
         filtered = []
         for n in self.kube.get_worker_nodes():
+            annotations = n.metadata.annotations or {}
             # skip node if it has no annotation
-            if self.ANNOTATION_ACTION not in n.metadata.annotations:
+            if self.ANNOTATION_ACTION not in annotations:
                 continue
             # attempt to match our filter
-            if n.metadata.annotations[self.ANNOTATION_ACTION] == action:
+            if annotations[self.ANNOTATION_ACTION] == action:
                 filtered.append(n)
         return filtered
 
@@ -59,8 +60,9 @@ class Nedry:
         metrics = self.kube.get_metrics()
         self.log("mashing everything up")
         for p in pods:
-            if self.ANNOTATION_SOFTLIMIT in p.metadata.annotations:
-                limit = self.kube.suffixed_to_num(p.metadata.annotations[self.ANNOTATION_SOFTLIMIT])
+            annotations = p.metadata.annotations or {}
+            if self.ANNOTATION_SOFTLIMIT in annotations:
+                limit = self.kube.suffixed_to_num(annotations[self.ANNOTATION_SOFTLIMIT])
                 k8s_namespace = p.metadata.namespace
                 k8s_podname = p.metadata.name
                 # print('got one! {}/{}'.format(k8s_namespace, k8s_podname))

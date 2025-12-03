@@ -1,4 +1,3 @@
-import json
 import random
 import time
 
@@ -45,12 +44,18 @@ class NedryKube:
         return self._api['custom']
 
     def get_worker_nodes(self):
+        """Get worker nodes by excluding control-plane nodes.
+
+        Modern K8s (1.24+) uses node-role.kubernetes.io/control-plane label.
+        Worker nodes are identified by absence of control-plane role.
+        """
         nodes = []
         node_list = self.api_core.list_node(watch=False)
         for n in node_list.items:
-            if 'kubernetes.io/role' in n.metadata.labels:
-                if n.metadata.labels['kubernetes.io/role'] == 'node':
-                    nodes.append(n)
+            labels = n.metadata.labels or {}
+            # Worker nodes don't have the control-plane role label
+            if 'node-role.kubernetes.io/control-plane' not in labels:
+                nodes.append(n)
         return nodes
 
     def get_all_pods(self, ordered=False):
@@ -116,9 +121,9 @@ class NedryKube:
             #   "replicas": 1
             # }
             rs = self.api_apps.read_namespaced_replica_set_status(controller_name, namespace)
-            controller_status['want'] = rs.status.replicas
-            controller_status['ready'] = rs.status.ready_replicas
-            controller_status['available'] = rs.status.available_replicas
+            controller_status['want'] = rs.status.replicas or 0
+            controller_status['ready'] = rs.status.ready_replicas or 0
+            controller_status['available'] = rs.status.available_replicas or 0
             controller_status['wait_timeout'] = self.calculate_wait_timeout(rs.spec)
 
         elif controller_type == 'StatefulSet':
@@ -135,9 +140,9 @@ class NedryKube:
             #   "updated_replicas": 3
             # }
             ss = self.api_apps.read_namespaced_stateful_set_status(controller_name, namespace)
-            controller_status['want'] = ss.status.replicas
-            controller_status['ready'] = ss.status.ready_replicas
-            controller_status['available'] = ss.status.ready_replicas
+            controller_status['want'] = ss.status.replicas or 0
+            controller_status['ready'] = ss.status.ready_replicas or 0
+            controller_status['available'] = ss.status.ready_replicas or 0
             controller_status['wait_timeout'] = self.calculate_wait_timeout(ss.spec)
 
         elif controller_type == 'DaemonSet':
@@ -155,9 +160,9 @@ class NedryKube:
             #   "updated_number_scheduled": 3
             # }
             ds = self.api_apps.read_namespaced_daemon_set_status(controller_name, namespace)
-            controller_status['want'] = ds.status.desired_number_scheduled
-            controller_status['ready'] = ds.status.number_ready
-            controller_status['available'] = ds.status.number_available
+            controller_status['want'] = ds.status.desired_number_scheduled or 0
+            controller_status['ready'] = ds.status.number_ready or 0
+            controller_status['available'] = ds.status.number_available or 0
             controller_status['wait_timeout'] = self.calculate_wait_timeout(ds.spec)
 
         elif controller_type == 'Job':
@@ -192,8 +197,26 @@ class NedryKube:
         return status['want'] == status['ready'] and status['ready'] == status['available']
 
     def delete_pod(self, namespace, pod_name, grace_period):
-        delete_options = kubernetes.client.V1DeleteOptions()
-        response = self.api_core.delete_namespaced_pod(pod_name, namespace, delete_options)
+        """Evict a pod using the Eviction API.
+
+        Uses policy/v1 Eviction which respects PodDisruptionBudgets.
+        This is the recommended way to remove pods in modern K8s (1.22+).
+        """
+        grace_period = grace_period if grace_period is not None else 30
+        eviction = kubernetes.client.V1Eviction(
+            metadata=kubernetes.client.V1ObjectMeta(
+                name=pod_name,
+                namespace=namespace
+            ),
+            delete_options=kubernetes.client.V1DeleteOptions(
+                grace_period_seconds=grace_period
+            )
+        )
+        self.api_core.create_namespaced_pod_eviction(
+            name=pod_name,
+            namespace=namespace,
+            body=eviction
+        )
         time.sleep(grace_period + 1)
 
     def safe_delete_pod(self, pod):
@@ -201,7 +224,7 @@ class NedryKube:
         namespace = pod.metadata.namespace
         pod_name = pod.metadata.name
 
-        if pod.metadata.owner_references is None:
+        if not pod.metadata.owner_references:
             print(colored("*** {} is an orphan pod - that's weird and scary, so I'm outta here".format(pod_name), 'yellow'))
             return
 
@@ -243,23 +266,47 @@ class NedryKube:
         return
 
     def suffixed_to_num(self, num):
+        """Convert K8s resource quantity string to numeric value.
 
-        if num[-1] == 'i':
-            suffix = num[-2:]
-            value = int(num[:-2])
-            if suffix == 'Ki':
-                return value * 1024
-            if suffix == 'Mi':
-                return value * 1024 * 1024
-            if suffix == 'Gi':
-                return value * 1024 * 1024 * 1024
-            if suffix == 'Ti':
-                return value * 1024 * 1024 * 1024 * 1024
-        elif num[-1] == 'm':
-            value = int(num[:-1])
-            return value
+        Handles binary suffixes (Ki, Mi, Gi, Ti, Pi, Ei),
+        decimal suffixes (n, u, m, k, M, G, T, P, E),
+        and raw numeric values.
+        """
+        if not num:
+            return 0
 
-        # fallthrough, assume we got a raw numeric value
+        # Binary suffixes (powers of 1024)
+        binary_suffixes = {
+            'Ki': 1024,
+            'Mi': 1024 ** 2,
+            'Gi': 1024 ** 3,
+            'Ti': 1024 ** 4,
+            'Pi': 1024 ** 5,
+            'Ei': 1024 ** 6,
+        }
+
+        # Decimal suffixes (powers of 1000, plus fractional)
+        decimal_suffixes = {
+            'n': 1e-9,   # nano
+            'u': 1e-6,   # micro
+            'm': 1e-3,   # milli
+            'k': 1e3,    # kilo
+            'M': 1e6,    # mega
+            'G': 1e9,    # giga
+            'T': 1e12,   # tera
+            'P': 1e15,   # peta
+            'E': 1e18,   # exa
+        }
+
+        # Check for binary suffix (2 chars)
+        if len(num) >= 2 and num[-2:] in binary_suffixes:
+            return int(num[:-2]) * binary_suffixes[num[-2:]]
+
+        # Check for decimal suffix (1 char)
+        if num[-1] in decimal_suffixes:
+            return int(float(num[:-1]) * decimal_suffixes[num[-1]])
+
+        # Raw numeric value
         return int(num)
 
     def get_metrics(self):
