@@ -1,5 +1,5 @@
 FROM --platform=$BUILDPLATFORM golang:1.21-alpine AS builder
-LABEL maintainer="ryan@espressive.com"
+LABEL maintainer="ryan.moore@lamnda.ai"
 
 ARG TARGETOS
 ARG TARGETARCH
